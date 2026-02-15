@@ -1,0 +1,340 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+
+
+enum Role {
+  ADMIN
+  AGENCE
+  PRESTATAIRE
+  CLIENT
+}
+
+enum PropertyType {
+  LOCATION
+  VENTE
+}
+
+enum ServiceType {
+  ELECTRICITE
+  PLOMBERIE
+  MENAGE
+  PEINTURE
+}
+
+enum OrderStatus {
+  EN_ATTENTE
+  CONFIRMEE
+  TERMINEE
+  ANNULEE
+}
+
+enum BookingStatus {
+  EN_ATTENTE
+  CONFIRMEE
+  REFUSEE
+  ANNULEE
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  FACEBOOK
+  PHONE
+}
+enum AdStatus {
+  DRAFT
+  PUBLISHED
+  SOLD
+  EXPIRED
+}
+
+
+enum PlanType {
+  FREE
+  PREMIUM
+  BOOST
+  URGENT
+}
+
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PhoneOTP {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  phone         String?  @unique
+  password      String
+  role          Role     @default(CLIENT)
+  avatar        String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  authProvider  AuthProvider @default(LOCAL)
+  providerId    String?
+
+  phoneVerified Boolean @default(false)
+  emailVerified Boolean @default(false)
+
+  properties    Property[]
+  serviceProvider ServiceProvider? 
+  orders        Order[]
+  bookings      Booking[]
+  
+  accounts      Account[]
+  sessions      Session[]
+  ads           Ad[]
+
+  @@index([role])
+}
+
+
+
+model Property {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  type        PropertyType
+  price       Int      @default(0)
+  surface     Int
+  rooms       Int
+  city        String
+  sector      String?
+  address     String
+  lat         Float?
+  lng         Float?
+
+  userId      String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency      Agency? @relation(fields: [agencyId], references: [id])
+  images      Image[]
+  videos      Video[]
+  orders      Order[]
+  bookings    Booking[]
+  agencyId    String?
+  @@index([userId])
+  @@index([city])
+  @@index([type])
+}
+
+
+
+model Image {
+  id         String   @id @default(cuid())
+  url        String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model Video {
+  id         String   @id @default(cuid())
+  url        String
+  isMain     Boolean  @default(false)
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+
+
+model ServiceProvider {
+  id          String      @id @default(uuid())
+  name        String
+  type        ServiceType
+  phone       String
+  city        String
+  description String?
+  userId      String      @unique
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([city])
+  @@index([type])
+}
+
+
+
+model Order {
+  id         String      @id @default(uuid())
+  userId     String
+  propertyId String?
+  providerId String?
+
+  status     OrderStatus @default(EN_ATTENTE)
+  message    String?
+
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property?        @relation(fields: [propertyId], references: [id])
+  provider ServiceProvider? @relation(fields: [providerId], references: [id])
+
+  @@index([userId])
+  @@index([providerId])
+}
+
+
+model Booking {
+  id         String        @id @default(uuid())
+  userId     String
+  propertyId String
+  visitDate  DateTime
+  status     BookingStatus @default(EN_ATTENTE)
+  message    String?
+
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([propertyId])
+  @@index([status])
+}
+
+model Ad {
+  id          String   @id @default(cuid())
+  userId      String
+
+  category    String
+  city        String
+  sector      String?
+  address     String
+  phone       String
+
+  rooms       Int
+  bathrooms   Int
+  surface     Int
+  price       Int
+  furnished   Boolean  @default(false)
+  description String   @db.Text
+
+  plan         PlanType  @default(FREE)
+  status       AdStatus  @default(DRAFT)
+  isFeatured   Boolean   @default(false)
+  boostUntil   DateTime?
+  premiumUntil DateTime?
+
+  views        Int       @default(0)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images       AdImage[]
+  features     AdFeature[]
+
+  @@index([userId])
+  @@index([city])
+  @@index([plan])
+  @@index([status])
+  @@index([createdAt])
+}
+
+
+
+model AdImage {
+  id      String @id @default(cuid())
+  adId    String
+  url     String
+  order   Int
+
+  ad      Ad     @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId])
+}
+
+model AdFeature {
+  id      String @id @default(cuid())
+  adId    String
+  name    String
+
+  ad      Ad     @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId])
+}
+model Agency {
+  id        String   @id @default(uuid())
+  name      String
+  city      String
+  phone     String
+  address   String?
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  properties Property[]
+}
+
